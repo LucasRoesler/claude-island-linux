@@ -21,11 +21,21 @@ Claude Code CLI → Hook Script → Unix Socket → Backend Service → D-Bus �
 ## Requirements
 
 - Python 3.11+
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 - PyGObject (GLib bindings)
 - watchdog (file monitoring)
 - psutil (process management)
 
 ## Installation
+
+### Using uv (recommended)
+
+```bash
+cd backend
+uv sync
+```
+
+### Using pip
 
 ```bash
 cd backend
@@ -36,6 +46,12 @@ pip install -e .
 
 ### Start Service
 
+With uv:
+```bash
+uv run claude-island-service
+```
+
+With pip:
 ```bash
 python -m claude_island_service
 ```
@@ -101,29 +117,44 @@ The service installs a Python hook script to `~/.claude/hooks/claude-island-stat
 
 ```
 backend/
-├── claude_island_service/
-│   ├── __init__.py
-│   ├── __main__.py          # Entry point
-│   ├── socket_server.py     # Unix socket server
-│   ├── state_manager.py     # Session state management
-│   ├── conversation_parser.py  # JSONL parsing
-│   ├── file_monitor.py      # File watching
-│   ├── dbus_service.py      # D-Bus interface
-│   ├── hook_installer.py    # Hook installation
-│   └── resources/
-│       └── claude-island-state.py  # Hook script
+├── src/
+│   └── claude_island_service/
+│       ├── __init__.py
+│       ├── __main__.py          # Entry point
+│       ├── socket_server.py     # Unix socket server
+│       ├── state_manager.py     # Session state management
+│       ├── conversation_parser.py  # JSONL parsing
+│       ├── file_monitor.py      # File watching
+│       ├── dbus_service.py      # D-Bus interface
+│       ├── hook_installer.py    # Hook installation
+│       └── resources/
+│           └── claude-island-state.py  # Hook script
 ├── tests/
 │   ├── test_parser.py
 │   ├── test_state.py
 │   └── test_socket.py
 ├── pyproject.toml
+├── uv.lock
 └── README.md
 ```
 
 ### Running Tests
 
+With uv:
+```bash
+uv run pytest
+```
+
+With pip:
 ```bash
 pytest tests/
+```
+
+### Linting
+
+```bash
+uv run ruff check .
+uv run ruff format .
 ```
 
 ### Logging
@@ -131,7 +162,7 @@ pytest tests/
 Set log level via environment variable:
 
 ```bash
-CLAUDE_ISLAND_LOG_LEVEL=DEBUG python -m claude_island_service
+CLAUDE_ISLAND_LOG_LEVEL=DEBUG uv run claude-island-service
 ```
 
 ## Auto-Start
