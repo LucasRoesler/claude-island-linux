@@ -97,7 +97,7 @@ The applet will:
 
 ### Testing
 
-See [TESTING.md](TESTING.md) for detailed testing instructions.
+See [docs/TESTING.md](docs/TESTING.md) for detailed testing instructions.
 
 Quick test:
 ```bash
@@ -155,10 +155,14 @@ claude-island-linux/
 │       └── dbus_client.py
 ├── tests/
 │   └── test_state_manager.py
+├── docs/
+│   ├── TESTING.md
+│   ├── ANALYSIS.md
+│   ├── GNOME_EXTENSION_APPROACH.md
+│   └── IMPLEMENTATION_SUMMARY.md
 ├── pyproject.toml
 ├── uv.lock
-├── README.md
-└── TESTING.md
+└── README.md
 ```
 
 ### Running Tests
