@@ -18,7 +18,6 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 1. **Install the project**:
 ```bash
-cd backend
 uv sync
 ```
 

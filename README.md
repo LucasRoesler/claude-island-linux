@@ -1,87 +1,259 @@
 # Claude Island for Linux
 
-A Linux port of [Claude Island](https://github.com/farouqaldori/claude-island) - bringing Dynamic Island-style notifications and controls for Claude Code CLI to Linux desktops.
-
-## Overview
-
-This project aims to bring the Claude Island experience to Linux users across all major desktop environments:
-
-- **GNOME**: Native Shell extension with top bar integration
-- **KDE/XFCE/MATE/Cinnamon/LXQt**: StatusNotifier system tray applet
+Backend service and StatusNotifier applet for monitoring Claude Code CLI sessions. Provides session monitoring, state management, and D-Bus interface for frontend applications.
 
 ## Architecture
 
-Three-tier design for maximum compatibility:
+The backend acts as a bridge between Claude Code CLI and frontend UIs:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│           Frontend Layer (Desktop-Specific)             │
-│  ┌────────────────┐         ┌──────────────────┐       │
-│  │ GNOME Shell    │         │ StatusNotifier   │       │
-│  │ Extension (JS) │         │ Applet (Python)  │       │
-│  └────────┬───────┘         └────────┬─────────┘       │
-└───────────┼──────────────────────────┼─────────────────┘
-            │        D-Bus              │
-┌───────────┴──────────────────────────┴─────────────────┐
-│               Backend Service (Python)                  │
-│  - Unix socket server (hook events)                    │
-│  - D-Bus service (frontend communication)              │
-│  - State management                                    │
-│  - JSONL parsing                                       │
-└─────────────────────────────────────────────────────────┘
+Claude Code CLI → Hook Script → Unix Socket → Backend Service → D-Bus → Frontends
 ```
 
-## Features
+### Components
 
-- Real-time Claude Code CLI session monitoring
-- Permission approval interface
-- Chat history viewing with markdown support
-- Multi-session support
-- Desktop-appropriate UI for each environment
+- **Unix Socket Server**: Receives events from Claude Code CLI hooks
+- **Session State Manager**: Tracks active sessions, tools, and conversation state
+- **JSONL Parser**: Reads and parses conversation files incrementally
+- **File Monitor**: Watches session directories for changes (inotify)
+- **D-Bus Service**: Exposes state and methods to frontend applications
 
-## Technology Stack
+## Requirements
 
-- **Backend**: Python 3.11+, asyncio, D-Bus, inotify
-- **GNOME Extension**: JavaScript/GJS, St/Clutter
-- **Applet**: Python/GTK3, AppIndicator3, libnotify
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- PyGObject (GLib bindings)
+- watchdog (file monitoring)
+- psutil (process management)
 
-## Documentation
+## Installation
 
-- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)**: Quick overview and timeline
-- **[GNOME_EXTENSION_APPROACH.md](GNOME_EXTENSION_APPROACH.md)**: Detailed implementation guide with code examples
-- **[ANALYSIS.md](ANALYSIS.md)**: Comprehensive analysis of original macOS app
-- **[SUMMARY.md](SUMMARY.md)**: Executive summary
+### Using uv (recommended)
 
-## Development Status
+```bash
+uv sync
+```
 
-🚧 **Planning Phase** - Currently in research and planning. Implementation has not started yet.
+### Using pip
 
-## Target Platforms
+```bash
+pip install -e .
+```
 
-- Fedora (primary target)
-- GNOME 45+
-- KDE Plasma 5.27+
-- XFCE 4.18+
-- MATE 1.26+
-- Cinnamon 5.8+
-- LXQt 1.3+
+## Usage
 
-## Estimated Timeline
+### Start Backend Service
 
-**10-12 weeks** for v1.0 (single full-time developer):
-- Weeks 1-3: Backend service
-- Weeks 4-6: GNOME Shell extension
-- Weeks 7-9: StatusNotifier applet
-- Weeks 10-12: Integration, packaging, documentation
+With uv:
+```bash
+uv run claude-island-service
+```
 
-## License
+With pip:
+```bash
+python -m claude_island_service
+```
 
-To be determined
+The service will:
+1. Create Unix socket at `/tmp/claude-island.sock`
+2. Register D-Bus service at `com.claudeisland.Service`
+3. Monitor `~/.claude/sessions/` for conversation files
+4. Install hook script to `~/.claude/hooks/` on first run
+
+### D-Bus Interface
+
+**Service Name**: `com.claudeisland.Service`
+**Object Path**: `/com/claudeisland/Service`
+
+#### Methods
+
+- `GetSessions() → a{sv}` - Returns all active sessions
+- `GetConversation(session_id: s) → aa{sv}` - Returns messages for a session
+- `SendApprovalDecision(session_id: s, decision: s)` - Send approval response
+
+#### Signals
+
+- `SessionStateChanged(session_id: s, phase: s)` - Session phase changed
+- `PermissionRequest(session_id: s, tool_name: s, params: a{sv})` - Needs approval
+- `NewMessage(session_id: s, message: a{sv})` - New conversation message
+
+### Start StatusNotifier Applet
+
+With uv:
+```bash
+uv run claude-island-applet
+```
+
+With pip:
+```bash
+python -m claude_island_applet
+```
+
+The applet will:
+1. Connect to backend via D-Bus
+2. Show system tray icon
+3. Display menu with active sessions
+4. Show approval dialogs for permission requests
+
+### Testing
+
+See [TESTING.md](TESTING.md) for detailed testing instructions.
+
+Quick test:
+```bash
+# Terminal 1: Start backend
+uv run claude-island-service
+
+# Terminal 2: Start applet
+uv run claude-island-applet
+
+# Terminal 3: Start Claude Code
+claude
+```
+
+## Hook System
+
+The service installs a Python hook script to `~/.claude/hooks/claude-island-state.py`. This script:
+
+- Captures Claude Code CLI events
+- Sends events via Unix socket
+- Waits for approval decisions on permission requests
+- Detects TTY for proper terminal integration
+
+### Supported Events
+
+- `SessionStart` / `SessionEnd`
+- `UserPromptSubmit`
+- `PreToolUse` / `PostToolUse`
+- `PermissionRequest`
+- `Notification`
+- `Stop` / `SubagentStop`
+- `PreCompact`
+
+## Development
+
+### Project Structure
+
+```
+claude-island-linux/
+├── src/
+│   ├── claude_island_service/    # Backend service
+│   │   ├── __init__.py
+│   │   ├── __main__.py
+│   │   ├── socket_server.py
+│   │   ├── state_manager.py
+│   │   ├── conversation_parser.py
+│   │   ├── file_monitor.py
+│   │   ├── dbus_service.py
+│   │   ├── hook_installer.py
+│   │   └── resources/
+│   │       └── claude-island-state.py
+│   └── claude_island_applet/     # StatusNotifier applet
+│       ├── __init__.py
+│       ├── __main__.py
+│       ├── indicator.py
+│       └── dbus_client.py
+├── tests/
+│   └── test_state_manager.py
+├── pyproject.toml
+├── uv.lock
+├── README.md
+└── TESTING.md
+```
+
+### Running Tests
+
+With uv:
+```bash
+uv run pytest
+```
+
+With pip:
+```bash
+pytest tests/
+```
+
+### Linting
+
+```bash
+uv run ruff check .
+uv run ruff format .
+```
+
+### Logging
+
+Set log level via environment variable:
+
+```bash
+CLAUDE_ISLAND_LOG_LEVEL=DEBUG uv run claude-island-service
+```
+
+## Auto-Start
+
+### D-Bus Activation
+
+Create `~/.local/share/dbus-1/services/com.claudeisland.Service.service`:
+
+```ini
+[D-BUS Service]
+Name=com.claudeisland.Service
+Exec=/usr/bin/python3 -m claude_island_service
+```
+
+The service will start automatically when a frontend connects.
+
+### systemd User Service
+
+Create `~/.config/systemd/user/claude-island.service`:
+
+```ini
+[Unit]
+Description=Claude Island Backend Service
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -m claude_island_service
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Enable and start:
+
+```bash
+systemctl --user enable --now claude-island.service
+```
+
+## Troubleshooting
+
+### Hook Not Installing
+
+Check that `~/.claude/` directory exists and is writable. The service needs to modify `~/.claude/settings.json`.
+
+### Socket Permission Denied
+
+Check permissions on `/tmp/claude-island.sock`. Remove the socket file if it exists with wrong permissions:
+
+```bash
+rm /tmp/claude-island.sock
+```
+
+### No Sessions Detected
+
+Verify Claude Code CLI is running and hook script is installed:
+
+```bash
+cat ~/.claude/settings.json | grep claude-island
+```
+
+Start a Claude Code session and check backend logs.
 
 ## Credits
 
-Original Claude Island by [Farouq Aldori](https://github.com/farouqaldori/claude-island)
+Based on [Claude Island](https://github.com/farouqaldori/claude-island) by Farouq Aldori. This is a Linux port adapting the hook system and state management approach for cross-platform desktop environments.
 
-## Contributing
+## License
 
-This project is in early planning stages. Contributions welcome once implementation begins.
+TBD
