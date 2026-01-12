@@ -1,6 +1,6 @@
-# Claude Island Backend Service
+# Claude Island for Linux
 
-Backend service for Claude Island Linux. Provides session monitoring and state management for Claude Code CLI, exposing a D-Bus interface for frontend applications.
+Backend service and StatusNotifier applet for monitoring Claude Code CLI sessions. Provides session monitoring, state management, and D-Bus interface for frontend applications.
 
 ## Architecture
 
@@ -44,7 +44,7 @@ pip install -e .
 
 ## Usage
 
-### Start Service
+### Start Backend Service
 
 With uv:
 ```bash
@@ -79,17 +79,38 @@ The service will:
 - `PermissionRequest(session_id: s, tool_name: s, params: a{sv})` - Needs approval
 - `NewMessage(session_id: s, message: a{sv})` - New conversation message
 
-### Testing D-Bus Interface
+### Start StatusNotifier Applet
 
+With uv:
 ```bash
-# List sessions
-busctl --user call com.claudeisland.Service \
-  /com/claudeisland/Service \
-  com.claudeisland.Service \
-  GetSessions
+uv run claude-island-applet
+```
 
-# Monitor signals
-busctl --user monitor com.claudeisland.Service
+With pip:
+```bash
+python -m claude_island_applet
+```
+
+The applet will:
+1. Connect to backend via D-Bus
+2. Show system tray icon
+3. Display menu with active sessions
+4. Show approval dialogs for permission requests
+
+### Testing
+
+See [TESTING.md](TESTING.md) for detailed testing instructions.
+
+Quick test:
+```bash
+# Terminal 1: Start backend
+uv run claude-island-service
+
+# Terminal 2: Start applet
+uv run claude-island-applet
+
+# Terminal 3: Start Claude Code
+claude
 ```
 
 ## Hook System
@@ -118,24 +139,28 @@ The service installs a Python hook script to `~/.claude/hooks/claude-island-stat
 ```
 backend/
 ├── src/
-│   └── claude_island_service/
+│   ├── claude_island_service/    # Backend service
+│   │   ├── __init__.py
+│   │   ├── __main__.py
+│   │   ├── socket_server.py
+│   │   ├── state_manager.py
+│   │   ├── conversation_parser.py
+│   │   ├── file_monitor.py
+│   │   ├── dbus_service.py
+│   │   ├── hook_installer.py
+│   │   └── resources/
+│   │       └── claude-island-state.py
+│   └── claude_island_applet/     # StatusNotifier applet
 │       ├── __init__.py
-│       ├── __main__.py          # Entry point
-│       ├── socket_server.py     # Unix socket server
-│       ├── state_manager.py     # Session state management
-│       ├── conversation_parser.py  # JSONL parsing
-│       ├── file_monitor.py      # File watching
-│       ├── dbus_service.py      # D-Bus interface
-│       ├── hook_installer.py    # Hook installation
-│       └── resources/
-│           └── claude-island-state.py  # Hook script
+│       ├── __main__.py
+│       ├── indicator.py
+│       └── dbus_client.py
 ├── tests/
-│   ├── test_parser.py
-│   ├── test_state.py
-│   └── test_socket.py
+│   └── test_state_manager.py
 ├── pyproject.toml
 ├── uv.lock
-└── README.md
+├── README.md
+└── TESTING.md
 ```
 
 ### Running Tests
